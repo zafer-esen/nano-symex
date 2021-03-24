@@ -24,6 +24,9 @@ class DSE(encoder : ExprEncoder, spawnSMT : => SMT) {
       (for (v@Var(name, PInt) <- variables) yield (v -> BigInt(0))).toMap
     val initstore =
       (for (v@Var(name, PInt) <- variables) yield (v -> name)).toMap
+    val initstoreAr =
+      (for (v@Var(name, PArray) <- variables) yield
+        (v -> Map.empty[BigInt, String])).toMap
 
     valQueue.clear
 
@@ -38,7 +41,7 @@ class DSE(encoder : ExprEncoder, spawnSMT : => SMT) {
         declareConst(name, IntType)
       for (v@Var(name, PArray) <- variables)
         declareConst(name, ArType)
-      execHelp(p, variables, test, bl, 0)(initstore)
+      execHelp(p, variables, test, bl, 0)(initstore, initstoreAr)
       reset
     }
 
@@ -47,7 +50,8 @@ class DSE(encoder : ExprEncoder, spawnSMT : => SMT) {
   def execHelp(p : Prog, variables : Seq[Var],
                valuation : Valuation,
                bl : Int, curl: Int)
-              (implicit store : SymbStore) : Unit = p match {
+              (implicit store   : SymbStore,
+                        arStore : ArSymbStore) : Unit = p match {
 
     case Skip => ()
 
@@ -62,7 +66,7 @@ class DSE(encoder : ExprEncoder, spawnSMT : => SMT) {
       val newValuation = valuation + (lhs -> eval(rhs,valuation))
       addAssertion("(= " + newConst + " " + encode(rhs) + ")")
       val newStore = store + (lhs -> newConst)
-      execHelp(rest, variables, newValuation, bl, curl)(newStore)
+      execHelp(rest, variables, newValuation, bl, curl)(newStore, arStore)
     }
 
     case Sequence(IfThenElse(cond, b1, b2), rest) => {

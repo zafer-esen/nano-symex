@@ -21,16 +21,20 @@ class SymEx(encoder : ExprEncoder, spawnSMT : => SMT) {
       declareConst(name, IntType)
     for (v@Var(name, PArray) <- variables)
       declareConst(name, ArType)
-    val store =
-      (for (v@Var(name, typ) <- variables) yield (v -> name)).toMap
+    val store = // also includes array variables
+      (for (v@Var(name, _) <- variables) yield (v -> name)).toMap
+    val arStore = // starts all arrays with empty maps
+      (for (v@Var(name, PArray) <- variables) yield
+        v -> Map.empty[BigInt, String]).toMap
 
-    execHelp(p, List(), depth)(store)
+    execHelp(p, List(), depth)(store, arStore)
 
     reset
   }
 
   def execHelp(p : Prog, ops : List[Prog], depth : Int)
-              (implicit store : SymbStore) : Unit = p match {
+              (implicit store   : SymbStore,
+                        arStore : ArSymbStore) : Unit = p match {
 
     case _ if ops.size > depth => ()
 
@@ -46,7 +50,7 @@ class SymEx(encoder : ExprEncoder, spawnSMT : => SMT) {
       val newConst = freshConst(IntType)
       addAssertion("(= " + newConst + " " + encode(rhs) + ")")
       val newStore = store + (lhs -> newConst)
-      execHelp(rest, op :: ops, depth)(newStore)
+      execHelp(rest, op :: ops, depth)(newStore, arStore)
     }
 
     case Sequence(op@Assign(lhs : ArElement, rhs), rest) => {
@@ -54,7 +58,7 @@ class SymEx(encoder : ExprEncoder, spawnSMT : => SMT) {
       addAssertion("(= " + newConst + " " + "(store " +
         store(lhs.a) + " " + encode(lhs.i) + " " + encode(rhs) + "))")
       val newStore = store + (lhs.a -> newConst)
-      execHelp(rest, op :: ops, depth)(newStore)
+      execHelp(rest, op :: ops, depth)(newStore, arStore)
     }
 
     case Sequence(IfThenElse(cond, b1, b2), rest) => {
@@ -131,6 +135,22 @@ object Step3 {
     val symex = new SymEx(IntExprEncoder, solver)
     symex.exec(p, List(A, i, j, x), 200)
     println("check-sat #: " + solver.numCheckSatCalls)
+  }
+
+}
+
+object Step4 {
+  import Program._
+
+  def main(args : Array[String]) {
+    assert(args.length == 1)
+    val len = args.last.toInt
+    println("Running step 3 with len = " + len)
+    val A = Var("A", PType.PArray)
+    val prog = new InsertionSortProg(A, IntConst(len))
+    import prog._
+
+    println(p.normalise)
   }
 
 }

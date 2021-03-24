@@ -11,11 +11,14 @@ abstract class ExprEncoder {
 
   type Valuation = Map[Var, BigInt]
 
-  type SymbStore = Map[Var, String]
+  type SymbStore   = Map[Var, String]
+  type ArSymbStore = Map[Var, Map[BigInt, String]]
 
-  def encode(expr : Expr)(implicit store : SymbStore) : String
+  def encode(expr : Expr)(implicit store    : SymbStore,
+                                   arStore  : ArSymbStore) : String
 
-  def encode(expr : BExpr)(implicit store : SymbStore) : String
+  def encode(expr : BExpr)(implicit store   : SymbStore,
+                                    arStore : ArSymbStore) : String
 
   def eval(expr : Expr, valuation: Valuation) : BigInt
 
@@ -35,7 +38,8 @@ object IntExprEncoder extends ExprEncoder {
   val ArType  : String = "(Array Int Int)"
 
   def encode(expr : Expr)
-            (implicit store : SymbStore) : String = expr match {
+            (implicit store   : SymbStore,
+                      arStore : ArSymbStore) : String = expr match {
     case v : Var         => store(v)
     case ArElement(a, i) => "(select " + store(a) + " " + encode(i) + ")"
     case IntConst(v)     => if (v >= 0) v.toString else ("(- " + -v + ")")
@@ -44,7 +48,8 @@ object IntExprEncoder extends ExprEncoder {
   }
 
   def encode(expr : BExpr)
-            (implicit store : SymbStore) : String = expr match {
+            (implicit store   : SymbStore,
+                      arStore : ArSymbStore) : String = expr match {
     case Eq(l, r)    => "(= "   + encode(l) + " " + encode(r) + ")"
     case Leq(l, r)   => "(<= "  + encode(l) + " " + encode(r) + ")"
     case Not(s)      => "(not " + encode(s) + ")"
@@ -81,7 +86,8 @@ class BVExprEncoder(width : Int) extends ExprEncoder {
   val ArType  : String = "(Array " + IntType + " " + IntType + ")"
 
   def encode(expr : Expr)
-            (implicit store : SymbStore) : String = expr match {
+            (implicit store   : SymbStore,
+                      arStore : ArSymbStore) : String = expr match {
     case v : Var     => store(v)
     case ArElement(a, i) => "(select " + store(a) + " " + encode(i) + ")"
     case IntConst(v) =>
@@ -94,7 +100,8 @@ class BVExprEncoder(width : Int) extends ExprEncoder {
   }
 
   def encode(expr : BExpr)
-            (implicit store : SymbStore) : String = expr match {
+            (implicit store   : SymbStore,
+                      arStore : ArSymbStore) : String = expr match {
     case Eq(l, r)    => "(= "     + encode(l) + " " + encode(r) + ")"
     case Leq(l, r)   => "(bvsle " + encode(l) + " " + encode(r) + ")"
     case Not(s)      => "(not "   + encode(s) + ")"

@@ -78,6 +78,12 @@ object Program {
    * While-programs.
    */
 
+  private var nameCounter = 0
+  def getTempVar (typ : Program.PType.Value) = {
+    nameCounter += 1
+    Var("temp_" + nameCounter, typ)
+  }
+
   abstract sealed class Prog {
     override def toString: String = {
       this match {
@@ -94,6 +100,24 @@ object Program {
         case While(cond, body) =>
           "While(" + cond + ") (\n" +
           body + "\n" + ")"
+      }
+    }
+
+    def normalise : Prog = {
+      nameCounter = 0
+      this match {
+        case Assign(a1@ArElement(_,_), a2@ArElement(_,_)) =>
+          // a1[i1] := a2[i2] --> t = a2[i2] ; a1[i1] := t
+          val t = getTempVar(PType.PInt) // only Int elem types are considered
+          Sequence(Assign(t, a2), Assign(a1, t))
+        case Sequence(left, right) =>
+          Sequence(left.normalise, right.normalise)
+        case IfThenElse(cond, b1, b2) =>
+          IfThenElse(cond, b1.normalise, b2.normalise)
+        case While(cond, body) =>
+          While(cond, body.normalise)
+        case stmt => stmt
+
       }
     }
   }
@@ -163,7 +187,8 @@ object ExprTest extends App {
     import smt._
     println("Testing SMT solver " + name + " ...")
 
-    implicit val store : SymbStore = Map(x -> "x", y -> "y")
+    implicit val store   : SymbStore   = Map(x -> "x", y -> "y")
+    implicit val arStore : ArSymbStore = Map.empty
 
     for (encoder <- List(IntExprEncoder, new BVExprEncoder (32))) {
       import encoder._
