@@ -1,3 +1,4 @@
+import Program.Expr
 
 object Program {
 
@@ -19,10 +20,21 @@ object Program {
   }
 
   case class Var     (name : String,
-                      ptype : PType.Value = PType.PInt)   extends Expr
-  case class IntConst(value : BigInt)                     extends Expr
-  case class Plus    (left : Expr, right : Expr)          extends Expr
-  case class Times   (left : Expr, right : Expr)          extends Expr
+                      ptype : PType.Value = PType.PInt)   extends Expr {
+    override def toString: String = name
+  }
+  case class IntConst(value : BigInt)                     extends Expr {
+    override def toString: String = value.toString
+  }
+  case class Plus    (left : Expr, right : Expr)          extends Expr {
+    override def toString: String = left + " + " + right
+  }
+  case class Times   (left : Expr, right : Expr)          extends Expr {
+    override def toString: String = left + " * " + right
+  }
+  case class ArElement(a : Var, i : Expr)                 extends Expr {
+    override def toString: String = a + "[" + i + "]"
+  }
 
   implicit def int2Expr(v : Int) : Expr = IntConst(v)
 
@@ -43,12 +55,22 @@ object Program {
     def unary_!         = Not(this)
   }
 
-  case class Eq  (left : Expr, right : Expr)     extends BExpr
-  case class Leq (left : Expr, right : Expr)     extends BExpr
+  case class Eq  (left : Expr, right : Expr)     extends BExpr {
+    override def toString: String = left + " = " + right
+  }
+  case class Leq (left : Expr, right : Expr)     extends BExpr {
+    override def toString: String = left + " <= " + right
+  }
 
-  case class Not (sub : BExpr)                   extends BExpr
-  case class And (left : BExpr, right : BExpr)   extends BExpr
-  case class Or  (left : BExpr, right : BExpr)   extends BExpr
+  case class Not (sub : BExpr)                   extends BExpr {
+    override def toString: String = "!" + sub
+  }
+  case class And (left : BExpr, right : BExpr)   extends BExpr {
+    override def toString: String = left + " & " + right
+  }
+  case class Or  (left : BExpr, right : BExpr)   extends BExpr {
+    override def toString: String = left + " | " + right
+  }
 
   //////////////////////////////////////////////////////////////////////////////
 
@@ -56,16 +78,34 @@ object Program {
    * While-programs.
    */
 
-  abstract sealed class Prog
+  abstract sealed class Prog {
+    override def toString: String = {
+      this match {
+        case Skip => ""
+        case Assign(v, rhs) => v + " := " + rhs
+        case Assert(cond) => "Assert(" + cond + ")"
+        case Sequence(left, right) => left + "\n" + right
+        case IfThenElse(cond, b1, b2) =>
+          "If(" + cond + ") (\n" +
+          b1 + "\n" +
+          ") Else (\n" +
+          b2 + "\n" +
+          ")"
+        case While(cond, body) =>
+          "While(" + cond + ") (\n" +
+          body + "\n" + ")"
+      }
+    }
+  }
 
-  case object Skip                                           extends Prog
+  case object Skip                                            extends Prog
 
-  case class  Assign    (v : Expr, rhs : Expr)               extends Prog
-  case class  Assert    (cond : BExpr)                       extends Prog
+  case class  Assign     (v : Expr, rhs : Expr)               extends Prog
+  case class  Assert     (cond : BExpr)                       extends Prog
 
-  case class  Sequence  (left : Prog, right : Prog)          extends Prog
-  case class  IfThenElse(cond : BExpr, b1 : Prog, b2 : Prog) extends Prog
-  case class  While     (cond : BExpr, body : Prog)          extends Prog
+  case class  Sequence   (left  : Prog, right : Prog)         extends Prog
+  case class  IfThenElse (cond : BExpr, b1 : Prog, b2 : Prog) extends Prog
+  case class  While      (cond : BExpr, body : Prog)          extends Prog
 
   def Prog(stmts : Prog*) : Prog =
     if (stmts.isEmpty)
@@ -83,9 +123,17 @@ object Program {
     def :=(that : Expr) = Assign(v, that)
   }
 
+  implicit def arElement2LHS(e : ArElement) = new AnyRef {
+    def :=(that : Expr) = Assign(e, that)
+  }
+
   implicit def ite2RichIte(p : IfThenElse) = new AnyRef {
     def Else(branch : Prog*) =
       IfThenElse(p.cond, p.b1, Prog(branch : _*))
+  }
+
+  implicit def arSelect(a : Var) = new AnyRef {
+    def apply(i : Expr) = ArElement(a, i)
   }
 
 }
@@ -199,4 +247,42 @@ object ProgTest extends App {
 
   println(ExampleProg.p)
 
+}
+
+class InsertionSortProg (A : Program.Var, len : Program.IntConst) {
+  import Program._
+  val i = Var("i")
+  val j = Var("j")
+  val x = Var("x")
+
+  val p = Prog(
+    i := 1,
+    While(i < len) (
+      x := A(i),
+      j := i - 1,
+      While(j >= 0 & A(j) > x) (
+        A(j+1) := A(j),
+        j := j - 1
+      ),
+      A(j+1) := x,
+      i := i + 1
+    ),
+
+    // assertion: the final array is sorted
+    i := 0,
+    While(i+1 < len) (
+      Assert(A(i) <= A(i+1)),
+      i := i + 1
+    )
+  )
+
+  override def toString: String = p.toString
+}
+
+object Step2Test extends App {
+  import Program._
+  // inputs: array A, array length len
+  val A = Var("A", PType.PArray)
+  val prog = new InsertionSortProg(A, IntConst(42))
+  println(prog)
 }

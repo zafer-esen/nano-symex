@@ -80,6 +80,8 @@ abstract class SMTProcess(cmd : Array[String]) extends SMT {
 
   private var nameCounter = 0
   private var logCmds     = false
+  private var numCheckSat = 0
+  def numCheckSatCalls = numCheckSat
 
   val numberPattern: Regex = "([0-9]+)".r
   
@@ -116,12 +118,15 @@ abstract class SMTProcess(cmd : Array[String]) extends SMT {
 
   def isSat : Boolean = {
     sendCommand("(check-sat)")
+    numCheckSat += 1
     readLine match {
       case null =>
         throw new SMTException("solver crashed")
       case "sat" =>
+        println("sat")
         true
       case "unsat" =>
+        println("unsat")
         false
       case str =>
         throw new SMTException("unexpected answer from solver: " + str)
@@ -134,6 +139,10 @@ abstract class SMTProcess(cmd : Array[String]) extends SMT {
       case numberPattern.unanchored(assignment) => BigInt(assignment)
       case str => 0
     }
+  }
+
+  def getArrayValue(name : String) : Map[BigInt, BigInt] = {
+    null // todo
   }
 
   def reset : Unit = {

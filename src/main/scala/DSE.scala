@@ -36,6 +36,8 @@ class DSE(encoder : ExprEncoder, spawnSMT : => SMT) {
       println("now starting" + test + "level" + bl)
       for (v@Var(name, PInt) <- variables)
         declareConst(name, IntType)
+      for (v@Var(name, PArray) <- variables)
+        declareConst(name, ArType)
       execHelp(p, variables, test, bl, 0)(initstore)
       reset
     }
