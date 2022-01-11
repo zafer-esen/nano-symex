@@ -6,10 +6,37 @@ abstract class ExprEncoder {
 
   import Program._
 
+  val useArrayTheory : Boolean
+
   val IntType : String
   val ArType  : String
 
-  type Valuation = Map[Var, BigInt]
+  class Valuation(val intValuation : Map[Var, BigInt],
+                  val arrayValuation : Map[Var, Map[BigInt, BigInt]]) {
+    override def toString: String =
+      intValuation.toString + "; " + (
+        (for(v <- arrayValuation) yield {v._1  + " -> [" + v._2.mkString(", ") +
+          "]"}).mkString(", "))
+
+    def apply(v : Var) : BigInt = {
+      assert(v.ptype == PType.PInt, "Trying to get integer value from " +
+        "array var: " + v)
+      intValuation(v)
+    }
+    def apply(v : Var, i : Int) : BigInt = {
+      assert(v.ptype == PType.PArray, "Trying to get array value from " +
+        "integer var: " + v)
+      arrayValuation(v)(i)
+    }
+    def +(other : Valuation) : Valuation = {
+      new Valuation(this.intValuation ++ other.intValuation,
+                    this.arrayValuation ++ other.arrayValuation)
+    }
+    def +(appendedVar : (Var, BigInt)) : Valuation = {
+      new Valuation(this.intValuation + appendedVar,
+                    this.arrayValuation)
+    }
+  }
 
   type SymbStore   = Map[Var, String]
   type ArSymbStore = Map[Var, Map[BigInt, String]]
@@ -30,7 +57,8 @@ abstract class ExprEncoder {
  * Translation from ASTs to SMT expressions, mapping the program integer
  * type to unbounded (mathematical) integers.
  */
-object IntExprEncoder extends ExprEncoder {
+class IntExprEncoder (override val useArrayTheory : Boolean)
+  extends ExprEncoder {
 
   import Program._
 
@@ -59,6 +87,7 @@ object IntExprEncoder extends ExprEncoder {
 
   def eval(expr : Expr, valuation : Valuation) : BigInt = expr match {
     case v : Var     => valuation(v)
+    case ArElement(a, i) => valuation(a, eval(i, valuation).toInt) // todo
     case IntConst(v) => v
     case Plus(l, r)  => (eval(l,valuation) + eval(r,valuation))
     case Times(l, r) => (eval(l,valuation) * eval(r,valuation))
@@ -78,7 +107,8 @@ object IntExprEncoder extends ExprEncoder {
  * Translation from ASTs to SMT expressions, mapping the program integer
  * type to signed bit-vectors of width <code>width</code>.
  */
-class BVExprEncoder(width : Int) extends ExprEncoder {
+class BVExprEncoder(width : Int, override val useArrayTheory: Boolean)
+  extends ExprEncoder {
 
   import Program._
 

@@ -20,7 +20,9 @@ object Program {
   }
 
   case class Var     (name : String,
-                      ptype : PType.Value = PType.PInt)   extends Expr {
+                      ptype : PType.Value = PType.PInt,
+                      arrayLen : Int = 0) //optional size argument for arrays
+                                                          extends Expr {
     override def toString: String = name
   }
   case class IntConst(value : BigInt)                     extends Expr {
@@ -39,7 +41,6 @@ object Program {
   implicit def int2Expr(v : Int) : Expr = IntConst(v)
 
   object PType extends Enumeration {
-    // TODO: PArray is not handled yet
     val PInt, PArray = Value
   }
 
@@ -78,12 +79,6 @@ object Program {
    * While-programs.
    */
 
-  private var nameCounter = 0
-  def getTempVar (typ : Program.PType.Value) = {
-    nameCounter += 1
-    Var("temp_" + nameCounter, typ)
-  }
-
   abstract sealed class Prog {
     override def toString: String = {
       this match {
@@ -100,24 +95,6 @@ object Program {
         case While(cond, body) =>
           "While(" + cond + ") (\n" +
           body + "\n" + ")"
-      }
-    }
-
-    def normalise : Prog = {
-      nameCounter = 0
-      this match {
-        case Assign(a1@ArElement(_,_), a2@ArElement(_,_)) =>
-          // a1[i1] := a2[i2] --> t = a2[i2] ; a1[i1] := t
-          val t = getTempVar(PType.PInt) // only Int elem types are considered
-          Sequence(Assign(t, a2), Assign(a1, t))
-        case Sequence(left, right) =>
-          Sequence(left.normalise, right.normalise)
-        case IfThenElse(cond, b1, b2) =>
-          IfThenElse(cond, b1.normalise, b2.normalise)
-        case While(cond, body) =>
-          While(cond, body.normalise)
-        case stmt => stmt
-
       }
     }
   }
@@ -177,7 +154,9 @@ object ExampleExpr {
 object ExprTest extends App {
 
   import Program._
-  import IntExprEncoder._
+  val useArrayTheory = true
+  val exprEncoder = new IntExprEncoder(useArrayTheory)
+  import exprEncoder._
   import ExampleExpr._
 
   println("f: " + f)
@@ -190,7 +169,8 @@ object ExprTest extends App {
     implicit val store   : SymbStore   = Map(x -> "x", y -> "y")
     implicit val arStore : ArSymbStore = Map.empty
 
-    for (encoder <- List(IntExprEncoder, new BVExprEncoder (32))) {
+    for (encoder <- List(exprEncoder,
+                         new BVExprEncoder (32, useArrayTheory))) {
       import encoder._
 
       println("  sort " + IntType)
@@ -274,7 +254,7 @@ object ProgTest extends App {
 
 }
 
-class InsertionSortProg (A : Program.Var, len : Program.IntConst) {
+class InsertionSortProg (val A : Program.Var, val len : Program.IntConst) {
   import Program._
   val i = Var("i")
   val j = Var("j")
@@ -308,6 +288,6 @@ object Step2Test extends App {
   import Program._
   // inputs: array A, array length len
   val A = Var("A", PType.PArray)
-  val prog = new InsertionSortProg(A, IntConst(42))
+  val prog = new InsertionSortProg(A, IntConst(10))
   println(prog)
 }

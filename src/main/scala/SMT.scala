@@ -52,6 +52,11 @@ abstract class SMT {
   def getSatValue(name : String) : BigInt
 
   /**
+   * Query the value of a given array constant.
+   */
+  def getArrayValue(name : String) : Map[BigInt, BigInt]
+
+  /**
    * Reset the SMT solver to the initial state.
    */
   def reset : Unit
@@ -83,7 +88,7 @@ abstract class SMTProcess(cmd : Array[String]) extends SMT {
   private var numCheckSat = 0
   def numCheckSatCalls = numCheckSat
 
-  val numberPattern: Regex = "([0-9]+)".r
+  val numberPattern: Regex = "(-? \\d+)(?!.*\\d)".r // match only last number
   
   def logCommands(flag : Boolean) =
     logCmds = flag
@@ -123,10 +128,12 @@ abstract class SMTProcess(cmd : Array[String]) extends SMT {
       case null =>
         throw new SMTException("solver crashed")
       case "sat" =>
-        println("sat")
+        if(logCmds)
+          println(cmd(0) + ": sat")
         true
       case "unsat" =>
-        println("unsat")
+        if(logCmds)
+          println(cmd(0) + ": unsat")
         false
       case str =>
         throw new SMTException("unexpected answer from solver: " + str)
@@ -135,14 +142,21 @@ abstract class SMTProcess(cmd : Array[String]) extends SMT {
 
   def getSatValue(name : String) : BigInt = {
     sendCommand("(get-value (" + name + "))")
-    readLine match {
-      case numberPattern.unanchored(assignment) => BigInt(assignment)
+    val value : BigInt = readLine match {
+      case numberPattern.unanchored(assignment) =>
+        BigInt(assignment.replaceAll("\\s", ""))
       case str => 0
     }
+    if(logCmds)
+      println(cmd(0) + ": " + name + " = " + value)
+    value
   }
 
   def getArrayValue(name : String) : Map[BigInt, BigInt] = {
-    null // todo
+    sendCommand("(get-value (" + name + "))")
+    val line = readLine
+    println(line)
+    ???
   }
 
   def reset : Unit = {
